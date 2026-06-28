@@ -18,36 +18,13 @@ jobs:
           path: src
           persist-credentials: false
 
-      - name: Push agent configs to openclaw-agents
-        env:
-          GITHUB_TOKEN: ${{ secrets.PAT }}
+      - name: Debug token expansion
         run: |
-          set -e
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git config --global user.name "GitHub Actions Bot"
-          
-          SRC="$GITHUB_WORKSPACE/src"
-          WORKDIR=$(mktemp -d)
-          git clone "https://github.com/KJ77452361/openclaw-agents.git" "$WORKDIR"
-          
-          cd "$WORKDIR"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git config user.name "GitHub Actions Bot"
-          
-          rm -rf agents/
-          mkdir -p agents
-          for agent in ca ceo coo cto he pe pm qm rs sa se; do
-            [ -d "$SRC/$agent" ] && cp -r "$SRC/$agent" agents/$agent
-          done
-          
-          git add agents/
-          git diff --cached --quiet && echo "NO_CHANGES" && exit 0
-          
-          HEAD_SHA=$(git rev-parse HEAD)
-          TREE_SHA=$(git write-tree)
-          COMMIT_MSG="sync: $(date -u +%Y-%m-%dT%H:%M:%SZ) — agents from openclaw-agents-config"
-          NEW_COMMIT_SHA=$(git commit-tree "$TREE_SHA" -p "$HEAD_SHA" -m "$COMMIT_MSG")
-          echo "Created commit: $NEW_COMMIT_SHA"
-          
-          # Push using git with embedded token in URL
-          GIT_ASKPASS_REDIRECT=0 git push "https://x-access-token:${GITHUB_TOKEN}@github.com/KJ77452361/openclaw-agents.git" master && echo "SUCCESS"
+          echo "=== Testing env var ==="
+          echo "GITHUB_TOKEN length: ${#GITHUB_TOKEN}"
+          echo "GITHUB_TOKEN first 4: ${GITHUB_TOKEN:0:4}"
+          echo "=== Testing curl with PAT in Authorization header ==="
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: token ${{ secrets.PAT }}" \
+            "https://api.github.com/repos/KJ77452361/openclaw-agents")
+          echo "HTTP code: $HTTP_CODE"
