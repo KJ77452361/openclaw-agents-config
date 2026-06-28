@@ -19,19 +19,20 @@ jobs:
           persist-credentials: false
 
       - name: Push agent configs to openclaw-agents
+        env:
+          GH_TOKEN: ${{ secrets.PAT }}
         run: |
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "GitHub Actions Bot"
           
           SRC="$GITHUB_WORKSPACE/src"
           WORKDIR=$(mktemp -d)
-          git clone "https://github.com/KJ77452361/openclaw-agents.git" "$WORKDIR"
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/KJ77452361/openclaw-agents.git" "$WORKDIR"
           
           cd "$WORKDIR"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name "GitHub Actions Bot"
           
-          # Copy agents from src (root-level) to agents/ level
           rm -rf agents/
           mkdir -p agents
           for agent in ca ceo coo cto he pe pm qm rs sa se; do
@@ -46,11 +47,6 @@ jobs:
           COMMIT_MSG="sync: $(date -u +%Y-%m-%dT%H:%M:%SZ) — agents from openclaw-agents-config"
           NEW_COMMIT_SHA=$(git commit-tree "$TREE_SHA" -p "$HEAD_SHA" -m "$COMMIT_MSG")
           
-          # Use GITHUB_TOKEN for API call (auto-available in workflows)
-          gh api --method PATCH \
-            -H "Authorization: Bearer $GITHUB_TOKEN" \
-            -H "Content-Type: application/json" \
-            "https://api.github.com/repos/KJ77452361/openclaw-agents/git/refs/heads/master" \
-            -f "sha=$HEAD_SHA" \
-            -f "force=false" \
-            -f "message=$COMMIT_MSG" && echo "SUCCESS: synced to openclaw-agents"
+          # Push using git with credential helper
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/KJ77452361/openclaw-agents.git"
+          git push origin master && echo "SUCCESS"
