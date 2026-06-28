@@ -44,7 +44,13 @@ jobs:
           TREE_SHA=$(git write-tree)
           COMMIT_MSG="sync: $(date -u +%Y-%m-%dT%H:%M:%SZ) — agents from openclaw-agents-config"
           NEW_COMMIT_SHA=$(git commit-tree "$TREE_SHA" -p "$HEAD_SHA" -m "$COMMIT_MSG")
+          echo "Created commit: $NEW_COMMIT_SHA"
           
-          # Use secrets.PAT directly in URL for push
-          git remote set-url origin "https://x-access-token:${{ secrets.PAT }}@github.com/KJ77452361/openclaw-agents.git"
-          git push origin master && echo "SUCCESS"
+          # Push using curl directly
+          RESP=$(curl -s -X PATCH \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Content-Type: application/json" \
+            "https://api.github.com/repos/KJ77452361/openclaw-agents/git/refs/heads/master" \
+            -d "{\"sha\":\"$HEAD_SHA\",\"force\":false,\"message\":\"$COMMIT_MSG\"}")
+          echo "API Response: $RESP"
+          echo "$RESP" | python3 -c "import json,sys; d=json.load(sys.stdin); print('Updated to:', d.get('object',{}).get('sha','ERROR: '+d.get('message','')))" && echo "SUCCESS"
