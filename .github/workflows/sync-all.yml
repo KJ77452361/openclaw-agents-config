@@ -20,33 +20,34 @@ jobs:
 
       - name: Push agent configs to openclaw-agents
         run: |
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git config --global user.name "GitHub Actions Bot"
           SRC="$GITHUB_WORKSPACE/src"
+          echo "Source agents: $(ls $SRC/)"
           
-          # Verify source agents exist
-          echo "Source agents:"
-          ls "$SRC/"
+          # Create a temp git repo for openclaw-agents and apply changes via gh cli
+          WORKDIR=$(mktemp -d)
+          git clone "https://x-access-token:${{ secrets.PAT }}@github.com/KJ77452361/openclaw-agents.git" "$WORKDIR"
           
-          # Clone target repo
-          git clone "https://x-access-token:${{ secrets.PAT }}@github.com/KJ77452361/openclaw-agents.git" /tmp/openclaw-agents
-          cd /tmp/openclaw-agents
-          
-          echo "Target agents/ before:"
-          ls agents/ 2>/dev/null || echo "(empty or missing)"
-          
-          # Remove existing agents/ content and copy from source
-          rm -rf agents/*
-          cp -r "$SRC"/. agents/
-          
-          echo "Target agents/ after:"
-          ls agents/
-          
-          echo "Git status:"
-          git status --short
-          
+          # Copy agents (src has: ca/, ceo/, coo/, etc. at root)
+          # Target wants: agents/ca/, agents/ceo/, etc.
+          rm -rf "$WORKDIR/agents/"
+          mkdir -p "$WORKDIR/agents"
+          for agent in ca ceo coo cto he pe pm qm rs sa se; do
+            if [ -d "$SRC/$agent" ]; then
+              cp -r "$SRC/$agent" "$WORKDIR/agents/$agent"
+              echo "Copied $agent/"
+            fi
+          done
+
+          cd "$WORKDIR"
           git add agents/
-          git diff --cached --stat
-          
-          git commit -m "sync: $(date -u +%Y-%m-%dT%H:%M:%SZ) — agents from openclaw-agents-config"
-          git push origin master && echo "PUSH_SUCCESS"
+          git diff --cached --quiet && echo "NO_CHANGES" || {
+            git commit -m "sync: $(date -u +%Y-%m-%dT%H:%M:%SZ) — agents from openclaw-agents-config"
+            # Push using gh api instead of git
+            gh api \
+              --method PUT \
+              -H "Authorization: Bearer ${{ secrets.PAT }}" \
+              -H "Content-Type: application/json" \
+              https://api.github.com/repos/KJ77452361/openclaw-agents/git/refs/heads/master \
+              -F "sha=$(git rev-parse HEAD)" \
+              && echo "PUSHED_VIA_API"
+          }
