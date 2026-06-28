@@ -20,23 +20,43 @@ jobs:
 
       - name: Push agent configs to openclaw-agents
         run: |
+          set -x  # Debug mode
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "GitHub Actions Bot"
           SRC="$GITHUB_WORKSPACE/src"
           
-          # Use raw curl to clone with embedded token
-          git clone "https://x-access-token:${{ secrets.PAT }}@github.com/KJ77452361/openclaw-agents.git" /tmp/openclaw-agents 2>&1 | head -5
+          # Clone the target repo
+          git clone "https://x-access-token:${{ secrets.PAT }}@github.com/KJ77452361/openclaw-agents.git" /tmp/openclaw-agents
           cd /tmp/openclaw-agents
           
+          # Debug: show current state
+          echo "=== Current agents/ structure ==="
+          ls agents/ 2>/dev/null || echo "No agents dir"
+          
+          # Copy agents from source (root-level) to target (agents/ level)
           for agent in ca ceo coo cto he pe pm qm rs sa se; do
             rm -rf "agents/$agent" 2>/dev/null || true
             if [ -d "$SRC/$agent" ]; then
               cp -r "$SRC/$agent" "agents/$agent"
+              echo "Copied $agent/"
             fi
           done
 
+          echo "=== After copy ==="
+          ls agents/
+          
+          echo "=== Git status ==="
+          git status --short
+          
+          echo "=== Git diff ==="
+          git diff --cached --stat
+          
           git add agents/
-          git diff --cached --quiet && echo "NO_CHANGES" || {
+          git diff --cached --quiet
+          if [ $? -eq 0 ]; then
+            echo "NO_CHANGES_TO_COMMIT"
+          else
             git commit -m "sync: $(date -u +%Y-%m-%dT%H:%M:%SZ) — agents from openclaw-agents-config"
-            git push origin master 2>&1 | head -10
-          }
+            echo "=== Pushing ==="
+            git push origin master
+          fi
