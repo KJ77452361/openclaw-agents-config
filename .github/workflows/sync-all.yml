@@ -2,7 +2,8 @@ name: Sync to openclaw-agents
 
 on:
   push:
-    branches: [master]
+    branches:
+      - master
   workflow_dispatch:
 
 permissions:
@@ -17,10 +18,7 @@ jobs:
           path: src
           persist-credentials: false
 
-      - name: Debug token (redacted)
-        run: echo "Token prefix: ${GITHUB_TOKEN:0:4}"
-
-      - name: Push agent configs to openclaw-agents
+      - name: Push agent configs
         run: |
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "GitHub Actions Bot"
@@ -29,10 +27,8 @@ jobs:
           git clone https://x-access-token:$GITHUB_TOKEN@github.com/KJ77452361/openclaw-agents.git /tmp/openclaw-agents
           cd /tmp/openclaw-agents
 
-          # agents-config: root-level dirs (ceo/, ca/, coo/, etc.)
-          # openclaw-agents: agents/ level (agents/ceo/, agents/ca/, etc.)
           for agent in ca ceo coo cto he pe pm qm rs sa se; do
-            rm -rf "agents/$agent"
+            rm -rf "agents/$agent" 2>/dev/null || true
             if [ -d "$SRC/$agent" ]; then
               cp -r "$SRC/$agent" "agents/$agent"
               echo "Synced $agent/"
@@ -42,5 +38,6 @@ jobs:
           git add agents/
           git diff --cached --quiet && echo "No agent changes" || {
             git commit -m "sync: $(date -u +%Y-%m-%dT%H:%M:%SZ) — agents from openclaw-agents-config"
-            git push origin master && echo "✅ agents/ synced to openclaw-agents"
+            git push origin master && echo "SUCCESS: agents/ synced to openclaw-agents"
           }
+
