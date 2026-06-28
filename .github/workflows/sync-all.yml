@@ -1,4 +1,4 @@
-name: Sync All Repos
+name: Sync to openclaw-agents
 
 on:
   push:
@@ -17,54 +17,31 @@ jobs:
           path: src
           persist-credentials: false
 
-      - name: Push agents/ to openclaw-agents
+      - name: Push agent configs to openclaw-agents
         env:
           GH_TOKEN: ${{ secrets.PAT }}
         run: |
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "GitHub Actions Bot"
+
+          # agents-config repo structure: agents at ROOT (ceo/, ca/, coo/, cto/, he/, pe/, pm/, qm/, rs/, sa/, se/)
+          # openclaw-agents: agents at agents/ level (agents/ceo/, agents/ca/, etc.)
+          SRC=/home/runner/work/openclaw-agents-config/openclaw-agents-config/src
+
           git clone https://x-access-token:$GH_TOKEN@github.com/KJ77452361/openclaw-agents.git /tmp/openclaw-agents
           cd /tmp/openclaw-agents
-          rm -rf agents/
-          cp -r /home/runner/work/openclaw-agents-config/openclaw-agents-config/src/agents .
+
+          # Sync each agent (root-level dirs from src → agents/ level in target)
+          for agent in ca ceo coo cto he pe pm qm rs sa se architect fullstack_engineer qa_engineer; do
+            rm -rf agents/$agent 2>/dev/null
+            if [ -d "$SRC/$agent" ]; then
+              cp -r "$SRC/$agent" agents/$agent
+              echo "Synced $agent/"
+            fi
+          done
+
           git add agents/
           git diff --cached --quiet && echo "No agent changes" || {
             git commit -m "sync: $(date -u +%Y-%m-%dT%H:%M:%SZ) — agents from openclaw-agents-config"
             git push origin master && echo "✅ agents/ synced to openclaw-agents"
-          }
-
-  sync-mybrain:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          path: src
-          persist-credentials: false
-
-      - name: Push MyBrain/ to openclaw-mybrain
-        env:
-          GH_TOKEN: ${{ secrets.PAT }}
-        run: |
-          MYBRAIN_PATH=""
-          if [ -d "src/MyBrain" ]; then
-            MYBRAIN_PATH="src/MyBrain"
-          elif [ -d "src/workspace/MyBrain" ]; then
-            MYBRAIN_PATH="src/workspace/MyBrain"
-          fi
-
-          if [ -z "$MYBRAIN_PATH" ]; then
-            echo "MyBrain not found in this repo, skipping"
-            exit 0
-          fi
-
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git config --global user.name "GitHub Actions Bot"
-          git clone https://x-access-token:$GH_TOKEN@github.com/KJ77452361/openclaw-mybrain.git /tmp/openclaw-mybrain
-          cd /tmp/openclaw-mybrain
-          rm -rf .
-          cp -r "$MYBRAIN_PATH/." .
-          git add -A
-          git diff --cached --quiet && echo "No MyBrain changes" || {
-            git commit -m "sync: $(date -u +%Y-%m-%dT%H:%M:%SZ) — MyBrain from openclaw-agents-config"
-            git push origin master && echo "✅ MyBrain synced to openclaw-mybrain"
           }
