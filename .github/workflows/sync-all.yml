@@ -20,43 +20,33 @@ jobs:
 
       - name: Push agent configs to openclaw-agents
         run: |
-          set -x  # Debug mode
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "GitHub Actions Bot"
           SRC="$GITHUB_WORKSPACE/src"
           
-          # Clone the target repo
+          # Verify source agents exist
+          echo "Source agents:"
+          ls "$SRC/"
+          
+          # Clone target repo
           git clone "https://x-access-token:${{ secrets.PAT }}@github.com/KJ77452361/openclaw-agents.git" /tmp/openclaw-agents
           cd /tmp/openclaw-agents
           
-          # Debug: show current state
-          echo "=== Current agents/ structure ==="
-          ls agents/ 2>/dev/null || echo "No agents dir"
+          echo "Target agents/ before:"
+          ls agents/ 2>/dev/null || echo "(empty or missing)"
           
-          # Copy agents from source (root-level) to target (agents/ level)
-          for agent in ca ceo coo cto he pe pm qm rs sa se; do
-            rm -rf "agents/$agent" 2>/dev/null || true
-            if [ -d "$SRC/$agent" ]; then
-              cp -r "$SRC/$agent" "agents/$agent"
-              echo "Copied $agent/"
-            fi
-          done
-
-          echo "=== After copy ==="
+          # Remove existing agents/ content and copy from source
+          rm -rf agents/*
+          cp -r "$SRC"/. agents/
+          
+          echo "Target agents/ after:"
           ls agents/
           
-          echo "=== Git status ==="
+          echo "Git status:"
           git status --short
           
-          echo "=== Git diff ==="
+          git add agents/
           git diff --cached --stat
           
-          git add agents/
-          git diff --cached --quiet
-          if [ $? -eq 0 ]; then
-            echo "NO_CHANGES_TO_COMMIT"
-          else
-            git commit -m "sync: $(date -u +%Y-%m-%dT%H:%M:%SZ) — agents from openclaw-agents-config"
-            echo "=== Pushing ==="
-            git push origin master
-          fi
+          git commit -m "sync: $(date -u +%Y-%m-%dT%H:%M:%SZ) — agents from openclaw-agents-config"
+          git push origin master && echo "PUSH_SUCCESS"
