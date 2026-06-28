@@ -19,9 +19,8 @@ jobs:
           persist-credentials: false
 
       - name: Push agent configs to openclaw-agents
-        env:
-          GH_TOKEN: ${{ secrets.PAT }}
         run: |
+          set -e
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "GitHub Actions Bot"
           
@@ -46,12 +45,13 @@ jobs:
           TREE_SHA=$(git write-tree)
           COMMIT_MSG="sync: $(date -u +%Y-%m-%dT%H:%M:%SZ) — agents from openclaw-agents-config"
           NEW_COMMIT_SHA=$(git commit-tree "$TREE_SHA" -p "$HEAD_SHA" -m "$COMMIT_MSG")
+          echo "Created commit: $NEW_COMMIT_SHA"
           
-          # Use env var GH_TOKEN (set from secrets.PAT) in curl
-          RESP=$(curl -s -X PATCH \
-            -H "Authorization: token $GH_TOKEN" \
+          # Use secrets.PAT directly in curl header
+          curl -s -X PATCH \
+            -H "Authorization: token ${{ secrets.PAT }}" \
             -H "Content-Type: application/json" \
             "https://api.github.com/repos/KJ77452361/openclaw-agents/git/refs/heads/master" \
-            -d "{\"sha\":\"$HEAD_SHA\",\"force\":false,\"message\":\"$COMMIT_MSG\"}")
-          echo "API Response: $RESP"
-          echo "$RESP" | python3 -c "import json,sys; d=json.load(sys.stdin); print('Updated to:', d.get('object',{}).get('sha','ERROR: '+d.get('message','')))" && echo "SUCCESS"
+            -d "{\"sha\":\"$HEAD_SHA\",\"force\":false,\"message\":\"$COMMIT_MSG\"}" | \
+            python3 -c "import json,sys; d=json.load(sys.stdin); print('Updated to:', d.get('object',{}).get('sha','ERROR: '+d.get('message','')))"
+          echo "SUCCESS"
