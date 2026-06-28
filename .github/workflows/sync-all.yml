@@ -19,15 +19,13 @@ jobs:
           persist-credentials: false
 
       - name: Push agent configs to openclaw-agents
-        env:
-          GH_TOKEN: ${{ secrets.PAT }}
         run: |
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "GitHub Actions Bot"
           
           SRC="$GITHUB_WORKSPACE/src"
           WORKDIR=$(mktemp -d)
-          git clone "https://x-access-token:${GH_TOKEN}@github.com/KJ77452361/openclaw-agents.git" "$WORKDIR"
+          git clone "https://github.com/KJ77452361/openclaw-agents.git" "$WORKDIR"
           
           cd "$WORKDIR"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -47,6 +45,6 @@ jobs:
           COMMIT_MSG="sync: $(date -u +%Y-%m-%dT%H:%M:%SZ) — agents from openclaw-agents-config"
           NEW_COMMIT_SHA=$(git commit-tree "$TREE_SHA" -p "$HEAD_SHA" -m "$COMMIT_MSG")
           
-          # Push using git with credential helper
-          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/KJ77452361/openclaw-agents.git"
+          # Use secrets.PAT directly in URL for push
+          git remote set-url origin "https://x-access-token:${{ secrets.PAT }}@github.com/KJ77452361/openclaw-agents.git"
           git push origin master && echo "SUCCESS"
