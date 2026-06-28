@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  sync-agents:
+  sync:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,25 +17,24 @@ jobs:
           path: src
           persist-credentials: false
 
+      - name: Debug token (redacted)
+        run: echo "Token prefix: ${GITHUB_TOKEN:0:4}"
+
       - name: Push agent configs to openclaw-agents
-        env:
-          GH_TOKEN: ${{ secrets.PAT }}
         run: |
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "GitHub Actions Bot"
 
-          # agents-config repo structure: agents at ROOT (ceo/, ca/, coo/, cto/, he/, pe/, pm/, qm/, rs/, sa/, se/)
-          # openclaw-agents: agents at agents/ level (agents/ceo/, agents/ca/, etc.)
-          SRC=/home/runner/work/openclaw-agents-config/openclaw-agents-config/src
-
-          git clone https://x-access-token:$GH_TOKEN@github.com/KJ77452361/openclaw-agents.git /tmp/openclaw-agents
+          SRC="$GITHUB_WORKSPACE/src"
+          git clone https://x-access-token:$GITHUB_TOKEN@github.com/KJ77452361/openclaw-agents.git /tmp/openclaw-agents
           cd /tmp/openclaw-agents
 
-          # Sync each agent (root-level dirs from src → agents/ level in target)
-          for agent in ca ceo coo cto he pe pm qm rs sa se architect fullstack_engineer qa_engineer; do
-            rm -rf agents/$agent 2>/dev/null
+          # agents-config: root-level dirs (ceo/, ca/, coo/, etc.)
+          # openclaw-agents: agents/ level (agents/ceo/, agents/ca/, etc.)
+          for agent in ca ceo coo cto he pe pm qm rs sa se; do
+            rm -rf "agents/$agent"
             if [ -d "$SRC/$agent" ]; then
-              cp -r "$SRC/$agent" agents/$agent
+              cp -r "$SRC/$agent" "agents/$agent"
               echo "Synced $agent/"
             fi
           done
