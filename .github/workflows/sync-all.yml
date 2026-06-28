@@ -22,39 +22,37 @@ jobs:
         run: |
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "GitHub Actions Bot"
-          git config --global --replace-all user.email "github-actions[bot]@users.noreply.github.com"
           
           SRC="$GITHUB_WORKSPACE/src"
           WORKDIR=$(mktemp -d)
           git clone "https://x-access-token:${{ secrets.PAT }}@github.com/KJ77452361/openclaw-agents.git" "$WORKDIR"
           
-          # Set config in the cloned repo too
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git config --global user.name "GitHub Actions Bot"
+          cd "$WORKDIR"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "GitHub Actions Bot"
           
           # Copy agents from src (root-level) to agents/ level in target
-          rm -rf "$WORKDIR/agents/"
-          mkdir -p "$WORKDIR/agents"
+          rm -rf agents/
+          mkdir -p agents
           for agent in ca ceo coo cto he pe pm qm rs sa se; do
-            [ -d "$SRC/$agent" ] && cp -r "$SRC/$agent" "$WORKDIR/agents/$agent"
+            [ -d "$SRC/$agent" ] && cp -r "$SRC/$agent" agents/$agent
           done
           
-          cd "$WORKDIR"
           git add agents/
           git diff --cached --quiet && echo "NO_CHANGES" && exit 0
           
-          # Create commit
           HEAD_SHA=$(git rev-parse HEAD)
           TREE_SHA=$(git write-tree)
           COMMIT_MSG="sync: $(date -u +%Y-%m-%dT%H:%M:%SZ) — agents from openclaw-agents-config"
           NEW_COMMIT_SHA=$(git commit-tree "$TREE_SHA" -p "$HEAD_SHA" -m "$COMMIT_MSG")
-          echo "Created commit: $NEW_COMMIT_SHA"
           
-          # Push via gh api
-          gh api --method PATCH \
+          echo "Pushing commit $NEW_COMMIT_SHA"
+          RESP=$(gh api --method PATCH \
             -H "Authorization: Bearer ${{ secrets.PAT }}" \
             -H "Content-Type: application/json" \
             "https://api.github.com/repos/KJ77452361/openclaw-agents/git/refs/heads/master" \
             -f "sha=$HEAD_SHA" \
             -f "force=false" \
-            -F "message=$COMMIT_MSG" && echo "SUCCESS: synced to openclaw-agents"
+            -f "message=$COMMIT_MSG" 2>&1)
+          echo "API Response: $RESP"
+          echo "$RESP" | python3 -c "import json,sys; d=json.load(sys.stdin); print('Updated ref:', d.get('object',{}).get('sha','error'))" && echo "SUCCESS"
