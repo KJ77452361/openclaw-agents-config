@@ -24,7 +24,7 @@ permissions:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    if: false  # 临时禁用，等待 classic PAT 配置
+    # if: false  # 已启用 — PAT (repo scope) 已配置（2026-06-28）
     steps:
       - uses: actions/checkout@v4
         with:
