@@ -18,13 +18,18 @@ jobs:
           path: src
           persist-credentials: false
 
-      - name: Push agent configs
+      - name: Push agent configs to openclaw-agents
+        env:
+          GH_TOKEN: ${{ secrets.PAT }}
         run: |
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "GitHub Actions Bot"
 
+          # Use git credential helper so git uses the token for all operations
+          git config --global credential.helper "!f() { echo "username=x-access-token"; echo "password=$GH_TOKEN"; }; f"
+
           SRC="$GITHUB_WORKSPACE/src"
-          git clone https://x-access-token:$GITHUB_TOKEN@github.com/KJ77452361/openclaw-agents.git /tmp/openclaw-agents
+          git clone https://github.com/KJ77452361/openclaw-agents.git /tmp/openclaw-agents
           cd /tmp/openclaw-agents
 
           for agent in ca ceo coo cto he pe pm qm rs sa se; do
@@ -40,4 +45,3 @@ jobs:
             git commit -m "sync: $(date -u +%Y-%m-%dT%H:%M:%SZ) — agents from openclaw-agents-config"
             git push origin master && echo "SUCCESS: agents/ synced to openclaw-agents"
           }
-
