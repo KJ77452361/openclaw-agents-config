@@ -72,3 +72,41 @@
 | 版本 | 日期 | 主要变更 |
 |------|------|---------|
 | v1.0.0 | 2026-06-28 | 基线封装 |
+
+---
+
+## [v1.1.1] GitHub Actions 同步改进 — 2026-06-28
+
+### 完成时间
+2026-06-28 13:40 CST
+
+### GitHub Actions
+- ✅ `openclaw-agents-config` 仓库添加 `sync-all.yml` workflow
+- ✅ workflow 已测试运行（但因 PAT 为 fine-grained token 而失败）
+- ⚠️ workflow 当前标记为 `if: false`（待配置 classic PAT）
+
+### GitHub Actions 同步待办
+- [ ] 创建 classic PAT（repo scope）替换当前的 fine-grained PAT
+- [ ] 更新 `secrets.PAT` → 启用 `sync-all.yml` workflow
+
+### 临时同步方案
+- ✅ `knowledge_sync_daily` cron job 已配置为三仓同步（workspace + MyBrain + agents-config）
+- Linux host gh 认证可正常推送至三仓
+
+### 三仓 GitHub 状态
+| 仓库 | 最新 Commit | 状态 |
+|------|-------------|------|
+| `openclaw-agents` | `b7c0e9c` | ✅ |
+| `openclaw-agents-config` | `1cf01841` | ✅ |
+| `openclaw-mybrain` | `d61775a` | ✅ |
+
+### 缺陷修复
+- ✅ `sys_self_health_hourly` payload 简化（复杂度→超时，timeout 300s）
+- ✅ 三仓 GitHub Actions workflows（待 classic PAT 配置）
+- ✅ `knowledge_sync_daily` 增强为三仓同步
+- ✅ `agents-config/` 克隆到 workspace 并加入 .gitignore
+- ✅ `MyBrain/` 加入 workspace .gitignore
+
+### 已知限制
+- ⚠️ 3 个 cron job error（isolated session Feishu delivery false-positive）
+- ⚠️ GitHub Actions sync workflow 待 classic PAT（当前 fine-grained PAT 限制）
