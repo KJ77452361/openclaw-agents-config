@@ -25,12 +25,14 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "GitHub Actions Bot"
 
-          # Use git credential helper so git uses the token for all operations
-          git config --global credential.helper "!f() { echo "username=x-access-token"; echo "password=$GH_TOKEN"; }; f"
-
           SRC="$GITHUB_WORKSPACE/src"
-          git clone https://github.com/KJ77452361/openclaw-agents.git /tmp/openclaw-agents
+          
+          # Clone with token embedded in URL
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/KJ77452361/openclaw-agents.git" /tmp/openclaw-agents
           cd /tmp/openclaw-agents
+          
+          # Override remote URL to ensure token is present for push
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/KJ77452361/openclaw-agents.git"
 
           for agent in ca ceo coo cto he pe pm qm rs sa se; do
             rm -rf "agents/$agent" 2>/dev/null || true
