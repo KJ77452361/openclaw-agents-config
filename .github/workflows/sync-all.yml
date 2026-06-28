@@ -18,27 +18,49 @@ jobs:
           path: src
           persist-credentials: false
 
-      - name: Push agent configs to openclaw-agents
+      - name: Push agent configs to openclaw-agents via API
+        env:
+          GH_TOKEN: ${{ secrets.PAT }}
+          SRC: ${{ github.workspace }}/src
         run: |
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git config --global user.name "GitHub Actions Bot"
-          
-          SRC="$GITHUB_WORKSPACE/src"
+          # Build the file tree for openclaw-agents/agents/
           WORKDIR=$(mktemp -d)
-          git clone "https://x-access-token:${{ secrets.PAT }}@github.com/KJ77452361/openclaw-agents.git" "$WORKDIR"
+          git clone "https://x-access-token:$GH_TOKEN@github.com/KJ77452361/openclaw-agents.git" "$WORKDIR"
           
-          # Copy agents (src has root-level dirs) to agents/ level in target
+          # Copy agents from src (root-level) to agents/ level
           rm -rf "$WORKDIR/agents/"
           mkdir -p "$WORKDIR/agents"
           for agent in ca ceo coo cto he pe pm qm rs sa se; do
-            if [ -d "$SRC/$agent" ]; then
-              cp -r "$SRC/$agent" "$WORKDIR/agents/$agent"
-            fi
+            [ -d "$SRC/$agent" ] && cp -r "$SRC/$agent" "$WORKDIR/agents/$agent"
           done
-
+          
+          # Get current HEAD tree SHA
+          HEAD_SHA=$(git -C "$WORKDIR" rev-parse HEAD)
+          echo "Current HEAD: $HEAD_SHA"
+          
+          # Build new tree with agents/ content
           cd "$WORKDIR"
           git add agents/
-          git diff --cached --quiet && echo "NO_CHANGES" || {
-            git commit -m "sync: $(date -u +%Y-%m-%dT%H:%M:%SZ) — agents from openclaw-agents-config"
-            git push origin master && echo "PUSHED_VIA_GIT"
-          }
+          
+          # Check if there are changes
+          git diff --cached --quiet && echo "NO_CHANGES" && exit 0
+          
+          # Get the new tree SHA
+          TREE_SHA=$(git write-tree)
+          echo "New tree: $TREE_SHA"
+          
+          # Create commit
+          COMMIT_MSG="sync: $(date -u +%Y-%m-%dT%H:%M:%SZ) — agents from openclaw-agents-config"
+          NEW_COMMIT_SHA=$(git commit-tree "$TREE_SHA" -p "$HEAD_SHA" -m "$COMMIT_MSG")
+          echo "New commit: $NEW_COMMIT_SHA"
+          
+          # Push using gh api
+          gh api --method PATCH \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Content-Type: application/json" \
+            "https://api.github.com/repos/KJ77452361/openclaw-agents/git/refs/heads/master" \
+            -f sha="$HEAD_SHA" \
+            -f "sha=$HEAD_SHA" \
+            -F "message=$COMMIT_MSG" \
+            -F "force=false" || \
+          echo "PATCH failed, trying PUT"
