@@ -1,5 +1,17 @@
 name: Sync to openclaw-agents
 
+# ⚠️ 当前状态: PENDING — 需要 classic PAT (repo scope)
+# 问题：当前 secrets.PAT 是 fine-grained token，仅限 1 个仓库
+# 解决：需要创建 classic PAT（repo scope）替换 secrets.PAT
+#
+# 手动创建 classic PAT:
+# 1. GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)
+# 2. Generate new token (classic)
+# 3. Select scopes: repo (full control)
+# 4. 将新 token 添加为 GitHub repo secret: PAT
+#
+# 临时方案：knowledge_sync_daily (Linux host cron job) 负责同步
+
 on:
   push:
     branches:
@@ -12,19 +24,42 @@ permissions:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    if: false  # 临时禁用，等待 classic PAT 配置
     steps:
       - uses: actions/checkout@v4
         with:
           path: src
           persist-credentials: false
 
-      - name: Debug token expansion
+      - name: Push agent configs to openclaw-agents
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT }}
         run: |
-          echo "=== Testing env var ==="
-          echo "GITHUB_TOKEN length: ${#GITHUB_TOKEN}"
-          echo "GITHUB_TOKEN first 4: ${GITHUB_TOKEN:0:4}"
-          echo "=== Testing curl with PAT in Authorization header ==="
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-            -H "Authorization: token ${{ secrets.PAT }}" \
-            "https://api.github.com/repos/KJ77452361/openclaw-agents")
-          echo "HTTP code: $HTTP_CODE"
+          set -e
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "GitHub Actions Bot"
+          
+          SRC="$GITHUB_WORKSPACE/src"
+          WORKDIR=$(mktemp -d)
+          git clone "https://github.com/KJ77452361/openclaw-agents.git" "$WORKDIR"
+          
+          cd "$WORKDIR"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "GitHub Actions Bot"
+          
+          rm -rf agents/
+          mkdir -p agents
+          for agent in ca ceo coo cto he pe pm qm rs sa se; do
+            [ -d "$SRC/$agent" ] && cp -r "$SRC/$agent" agents/$agent
+          done
+          
+          git add agents/
+          git diff --cached --quiet && echo "NO_CHANGES" && exit 0
+          
+          HEAD_SHA=$(git rev-parse HEAD)
+          TREE_SHA=$(git write-tree)
+          COMMIT_MSG="sync: $(date -u +%Y-%m-%dT%H:%M:%SZ) — agents from openclaw-agents-config"
+          NEW_COMMIT_SHA=$(git commit-tree "$TREE_SHA" -p "$HEAD_SHA" -m "$COMMIT_MSG")
+          echo "Created commit: $NEW_COMMIT_SHA"
+          
+          GIT_ASKPASS_REDIRECT=0 git push "https://x-access-token:${GITHUB_TOKEN}@github.com/KJ77452361/openclaw-agents.git" master && echo "SUCCESS"
