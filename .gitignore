@@ -1,0 +1,25 @@
+# === Runtime data (must never commit) ===
+# These directories are excluded at the source agents/ level
+# This file is a safety net for the backup repository
+
+# Agent runtime directories (large, session-specific)
+sessions/
+memory/
+knowledge/
+inbox/
+agent/
+workspace/
+skills/
+.dreams/
+openclaw-workspace-state.json
+agent_bak/
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Secrets and credentials
+*.log
+*.lock
