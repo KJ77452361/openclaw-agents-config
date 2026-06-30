@@ -1,0 +1,159 @@
+name: OpenClaw Ecosystem CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # P7/P24: Skills凭证扫描
+  skills-secrets-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            skills
+            agents
+          sparse-checkout-cone-mode: false
+
+      - name: 下载扫描脚本
+        run: |
+          # 内联扫描脚本（避免外部依赖）
+          SCAN_DIR="${{ github.workspace }}"
+          VIOLATIONS=0
+          
+          echo "开始Skills凭证扫描..."
+          
+          # 敏感模式
+          SCAN_PATTERNS=(
+            "api[_-]?key['\":\s]*[=:\s]*['\"][a-zA-Z0-9_-]{20,}"
+            "secret['\":\s]*[=:\s]*['\"][a-zA-Z0-9_-]{10,}"
+            "sk-[a-zA-Z0-9]{20,}"
+            "ghp_[a-zA-Z0-9]{36,}"
+            "gho_[a-zA-Z0-9]{36,}"
+          )
+          
+          FOUND=0
+          for skill_dir in "$SCAN_DIR"/skills/*/; do
+            SKILL=$(basename "$skill_dir")
+            for pattern in "${SCAN_PATTERNS[@]}"; do
+              MATCHES=$(grep -r --include="*.md" --include="*.js" --include="*.sh" \
+                -n "$pattern" "$skill_dir" 2>/dev/null || true)
+              if [ -n "$MATCHES" ]; then
+                # 过滤注释和示例
+                REAL=$(echo "$MATCHES" | grep -v "^.*#.*$" | grep -v "example\|test\|placeholder" || true)
+                if [ -n "$REAL" ]; then
+                  echo "⚠️ [$SKILL] 疑似凭证:"
+                  echo "$REAL"
+                  ((FOUND++)) || true
+                fi
+              fi
+            done
+          done
+          
+          if (( FOUND > 0 )); then
+            echo "❌ 发现 $FOUND 个疑似凭证，扫描失败"
+            exit 1
+          else
+            echo "✅ Skills凭证扫描通过"
+          fi
+
+  # P13: 配置文件验证
+  config-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            agents
+          sparse-checkout-cone-mode: false
+
+      - name: 验证Agent配置文件
+        run: |
+          echo "验证Agent配置文件..."
+          FAILED=0
+          for agent_dir in agents/*/; do
+            AGENT=$(basename "$agent_dir")
+            # 检查必要文件
+            for f in SOUL.md AGENTS.md HEARTBEAT.md; do
+              if [ ! -f "$agent_dir/$f" ]; then
+                echo "⚠️ [$AGENT] 缺少 $f"
+                ((FAILED++)) || true
+              fi
+            done
+            # 检查版本号格式
+            VERSION=$(grep '^# .*版本.*v[0-9]' "$agent_dir/SOUL.md" 2>/dev/null || echo "")
+            if [ -z "$VERSION" ]; then
+              echo "⚠️ [$AGENT] SOUL.md缺少版本号"
+              ((FAILED++)) || true
+            fi
+          done
+          
+          if (( FAILED > 0 )); then
+            echo "❌ 配置文件验证失败 ($FAILED 个问题)"
+            exit 1
+          fi
+          echo "✅ 配置文件验证通过"
+
+  # P13: Standards同步测试
+  sync-test:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            agents
+          sparse-checkout-cone-mode: false
+
+      - name: 测试标准同步
+        run: |
+          echo "测试标准文件同步能力..."
+          # 验证关键文件存在
+          test -f agents/ceo/STANDARDS.md && echo "✅ STANDARDS.md存在"
+          test -f agents/ceo/MEMORY.md && echo "✅ MEMORY.md存在"
+          test -f agents/ceo/SOUL.md && echo "✅ SOUL.md存在"
+          # 统计文件数
+          FILE_COUNT=$(find agents/ -name "SOUL.md" -o -name "AGENTS.md" | wc -l)
+          echo "标准文件总数: $FILE_COUNT"
+
+      - name: 推送到GitHub
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT }}
+        run: |
+          if [ -z "$GITHUB_TOKEN" ]; then
+            echo "⚠️ PAT未配置，跳过推送"
+            exit 0
+          fi
+          
+          TARGET_REPO="KJ77452361/openclaw-agents"
+          WORKDIR=$(mktemp -d)
+          
+          git clone "https://x-access-token:${GITHUB_TOKEN}@github.com/${TARGET_REPO}.git" "$WORKDIR" 2>/dev/null || {
+            echo "⚠️ 克隆失败（可能无权限），跳过推送"
+            exit 0
+          }
+          
+          cd "$WORKDIR"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "GitHub Actions Bot"
+          
+          # 复制更新
+          rm -rf agents/ && mkdir -p agents/
+          cp -r "${{ github.workspace }}/agents/"* agents/
+          
+          if git diff --cached --quiet && git diff --quiet; then
+            echo "✅ 无变更，跳过推送"
+          else
+            git add agents/
+            git commit -m "ci: $(date -u +%Y-%m-%dT%H:%M:%SZ) — ecosystem sync"
+            git push && echo "✅ 推送成功"
+          fi
+          
+          rm -rf "$WORKDIR"
